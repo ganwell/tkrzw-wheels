@@ -3,28 +3,28 @@
 set -e
 set -x
 
+. ./common
+
 setup() {
-
-apk --no-cache add \
-    alpine-sdk \
-    sudo \
-    bash \
-    python3-dev \
-    py3-pip \
-    patchelf \
-    linux-headers \
-    curl
-
+    apk --no-cache add \
+        alpine-sdk \
+        sudo \
+        bash \
+        python3-dev \
+        py3-pip \
+        patchelf \
+        linux-headers \
+        curl
+    chown -R runner /usr/local
 }
 
-build() {
+library() {
+    build_library
+}
 
-export PYTHONUSERBASE="$HOME/python"
-export PATH="$PATH:$HOME/python/bin"
-
-pip install -U pip
-pip install -U build auditwheel
-
+wheel() {
+    install_build_wheel
+    build_wheel
 }
 
 $1
