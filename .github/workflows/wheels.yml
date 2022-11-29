@@ -2,19 +2,35 @@ on:
   push:
     branches:
       - main
+env:
+  TKRZW_VERSION: 1.0.24
+  TKRZW_PYTHON_VERSION: 0.1.28
+  PYTHON_VERSIONS: "3.8.13 3.9.13 3.10.6"
+  PYTHON_VERSIONS_KEY: "3.8.13-3.9.13-3.10.6"
+  LDFLAGS: "-flto"
 
 jobs:
-  build:
-    env:
-      TKRZW_VERSION: 1.0.24
-      TKRZW_PYTHON_VERSION: 0.1.28
-      LDFLAGS: "-flto"
-
+  alpine:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
+      - name: Cache library build
+        id: library-build
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/library-${{ env.TKRZW_VERSION }}
+          key: library-${{ env.TKRZW_VERSION }}
+
+      - name: Cache pyenv
+        id: pyenv
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/pyenv
+          key: pyenv-${{ env.PYTHON_VERSIONS_KEY }}
+
       - name: Create cache dir
+        if: steps.library-build.outputs.cache-hit != 'true'
         run: |
           mkdir -p ${{ github.workspace }}/library-${{ env.TKRZW_VERSION }}
         shell: bash
@@ -25,16 +41,10 @@ jobs:
           volumes: ${{ github.workspace }}/library-${{ env.TKRZW_VERSION }}:/usr/local
 
       - name: Setup build as root
+        if: steps.library-build.outputs.cache-hit != 'true'
         run: |
-          ./alpine setup
+          ./alpine setup_library
         shell: alpine.sh --root {0}
-
-      - name: Cache Library Build
-        id: library-build
-        uses: actions/cache@v3
-        with:
-          path: ${{ github.workspace }}/library-${{ env.TKRZW_VERSION }}
-          key: library-${{ env.TKRZW_VERSION }}
 
       - name: Build library
         if: steps.library-build.outputs.cache-hit != 'true'
@@ -42,10 +52,22 @@ jobs:
           ./alpine library
         shell: alpine.sh {0}
 
-      - name: Build wheel
+      - name: Setup build as root
         run: |
-          ./alpine wheel
+          ./alpine setup_pyenv
+        shell: alpine.sh --root {0}
+
+      - name: Install python versions
+        if: steps.pyenv.outputs.cache-hit != 'true'
+        run: |
+          ./alpine python_versions
         shell: alpine.sh {0}
+
+
+      # - name: Build wheel
+      #   run: |
+      #     ./alpine wheel
+      #   shell: alpine.sh {0}
 
       # - uses: actions/upload-artifact@v3
       #   with:

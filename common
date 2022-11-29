@@ -4,8 +4,23 @@ BASE="$PWD"
 LIBRARY_DIR="$BASE/tkrzw-$TKRZW_VERSION"
 MODULE_DIR="$BASE/tkrzw-python-$TKRZW_PYTHON_VERSION"
 
-export PYTHONUSERBASE="$HOME/python"
-export PATH="$PATH:$HOME/python/bin"
+export PYENV_ROOT="$BASE/pyenv"
+export PATH="$PATH:$PYENV_ROOT/bin"
+
+enable_pyenv() {
+    if command -v pyenv > /dev/null; then
+        eval "$(pyenv init --path)"
+    fi
+}
+enable_pyenv
+
+install_pyenv() {
+    curl https://pyenv.run | bash
+    enable_pyenv
+    for version in $PYTHON_VERSIONS; do
+        pyenv install $version
+    done
+}
 
 update_version() {
     sed -i "s/^\s*package_version.*/package_version = '$TKRZW_PYTHON_VERSION'/g" setup.py
@@ -29,6 +44,4 @@ build_wheel() {
     cd "$MODULE_DIR"
     update_version
     python -m build --wheel
-    auditwheel repair "./dist/tkrzw-$TKRZW_PYTHON_VERSION-cp310-cp310-linux_x86_64.whl"
-    auditwheel show "./wheelhouse/tkrzw-$TKRZW_PYTHON_VERSION-cp310-cp310-musllinux_1_2_x86_64.whl"
 }

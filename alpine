@@ -5,14 +5,9 @@ set -x
 
 . ./common
 
-setup() {
+setup_library() {
     apk --no-cache add \
-        alpine-sdk \
-        sudo \
-        bash \
-        python3-dev \
-        py3-pip \
-        patchelf \
+        build-base \
         linux-headers \
         curl
     chown -R runner /usr/local
@@ -22,9 +17,32 @@ library() {
     build_library
 }
 
+setup_pyenv() {
+    apk add --no-cache git \
+        bash \
+        build-base \
+        libffi-dev \
+        openssl-dev \
+        bzip2-dev \
+        zlib-dev \
+        xz-dev \
+        readline-dev \
+        sqlite-dev \
+        linux-headers \
+        curl \
+        tk-dev
+    chown -R runner /usr/local
+}
+
+python_versions() {
+    install_pyenv
+}
+
 wheel() {
     install_build_wheel
     build_wheel
+    auditwheel repair "./dist/tkrzw-$TKRZW_PYTHON_VERSION-cp310-cp310-linux_x86_64.whl"
+    auditwheel show "./wheelhouse/tkrzw-$TKRZW_PYTHON_VERSION-cp310-cp310-musllinux_1_2_x86_64.whl"
 }
 
 $1
