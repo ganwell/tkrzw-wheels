@@ -1,0 +1,25 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup latest Alpine Linux
+        uses: jirutka/setup-alpine@v1
+
+      - name: Setup build as root
+        run: |
+          ./alpine setup
+        shell: alpine.sh --root {0}
+
+      - name: Build as user
+        run: |
+          ./alpine build
+        shell: alpine.sh {0}
+
+

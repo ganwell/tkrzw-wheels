@@ -1,0 +1,30 @@
+#!/bin/sh
+
+set -e
+set -x
+
+setup() {
+
+apk --no-cache add \
+    alpine-sdk \
+    sudo \
+    bash \
+    python3-dev \
+    py3-pip \
+    patchelf \
+    linux-headers \
+    curl
+
+}
+
+build() {
+
+export PYTHONUSERBASE="$HOME/python"
+export PATH="$PATH:$HOME/python/bin"
+
+pip install -U pip
+pip install -U build auditwheel
+
+}
+
+$1
