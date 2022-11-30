@@ -47,11 +47,11 @@ jobs:
 
       - name: Cache tkrzw python
         if: steps.alpine-library-build.outputs.cache-hit != 'true'
-        id: alpine-tkrzw
+        id: tkrzw-tar
         uses: actions/cache@v3
         with:
           path: ${{ github.workspace }}/tkrzw-${{ env.TKRZW_VERSION }}.tar.gz
-          key: alpine-tkrzw-${{ env.TKRZW_VERSION }}
+          key: tkrzw-tar-${{ env.TKRZW_VERSION }}
 
       ### Setup ###
       - name: Setup latest Alpine Linux
@@ -125,11 +125,11 @@ jobs:
         shell: bash
 
       - name: Cache tkrzw python
-        id: alpine-tkrzw-python
+        id: tkrzw-python-tar
         uses: actions/cache@v3
         with:
           path: ${{ github.workspace }}/tkrzw-python-${{ env.TKRZW_PYTHON_VERSION }}.tar.gz
-          key: alpine-tkrzw-python-${{ env.TKRZW_PYTHON_VERSION }}
+          key: tkrzw-python-tar-${{ env.TKRZW_PYTHON_VERSION }}
 
       ### Setup ###
       - name: Setup latest Alpine Linux
