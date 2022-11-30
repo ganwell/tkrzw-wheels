@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+
+import hashlib
+import os
+import sys
+import urllib.request as request
+from contextlib import contextmanager
+from pathlib import Path
+from subprocess import DEVNULL, run as srun
+
+_CHUNK = 16 * 1024
+
+
+def make_cp(version):
+    sversion = version.split(".")
+    return f"cp{sversion[0]}{sversion[1]}"
+
+
+def make_config(version=None):
+    tkrzw_version = os.environ["TKRZW_VERSION"]
+    tkrzw_python_version = os.environ["TKRZW_PYTHON_VERSION"]
+    config = {
+        "tkrzw_python_version": tkrzw_python_version,
+        "tkrzw_python_url": f"https://dbmx.net/tkrzw/pkg-python/tkrzw-python-{tkrzw_python_version}.tar.gz",
+        "tkrzw_python_sha": os.environ["TKRZW_PYTHON_SHA"],
+        "tkrzw_python": f"tkrzw-python-{tkrzw_python_version}",
+        "tkrzw_version": tkrzw_version,
+        "tkrzw_library": f"tkrzw-{tkrzw_version}",
+        "tkrzw_url": f"https://dbmx.net/tkrzw/pkg/tkrzw-{tkrzw_version}.tar.gz",
+        "tkrzw_sha": os.environ["TKRZW_SHA"],
+    }
+    if version:
+        cp = make_cp(version)
+        config.update(
+            {
+                "python": get_python(version),
+                "dist_path": f"./dist/tkrzw-{tkrzw_python_version}-{cp}-{cp}-linux_x86_64.whl",
+                "wheelhouse_path": f"./wheelhouse/tkrzw-{tkrzw_python_version}-{cp}-{cp}-musllinux_1_2_x86_64.whl",
+            }
+        )
+    return config
+
+
+def get_python(version):
+    root = os.environ["PYENV_ROOT"]
+    return f"{root}/versions/{version}/bin/python3"
+
+
+def pip_install(python, packages):
+    if isinstance(packages, str):
+        packages = [packages]
+    run([python, "-m", "pip", "install", "-U"] + packages)
+
+
+@contextmanager
+def chdir(path):
+    cwd = os.getcwd()
+    os.chdir(path)
+    print(f"change dir {path}")
+    yield
+    os.chdir(cwd)
+    print(f"restore dir {cwd}")
+
+
+def args_print(args):
+    if not isinstance(args, str):
+        args = [str(x) for x in args]
+        args = " ".join(args)
+    print(f"\n$ {args}")
+
+
+def run(*args, stdout=None, stderr=None, stdin=None, check=True, shell=False, **kwargs):
+    cmd = args[0]
+    args = args[1:]
+    args_print(cmd)
+    if stdout is None:
+        stdout = sys.stdout
+    if stderr is None:
+        stderr = sys.stderr
+    if stdin is None and "input" not in kwargs:
+        stdin = DEVNULL
+    if shell and not isinstance(cmd, str):
+        cmd = " ".join(cmd)
+    return srun(
+        cmd,
+        *args,
+        stdout=stdout,
+        stderr=stderr,
+        stdin=stdin,
+        check=check,
+        shell=shell,
+        **kwargs,
+    )
+
+
+def swrite(*args, **kwargs):
+    out = sys.stdout
+    out.write(*args, **kwargs)
+    out.flush()
+
+
+def download_url(url, sha):
+    file_ = Path(url).name
+    m = hashlib.sha1()
+    if Path(file_).exists():
+        print(f"check {file_}")
+        with open(file_, "rb") as f:
+            while True:
+                swrite(".")
+                chunk = f.read(_CHUNK)
+                m.update(chunk)
+                if not chunk:
+                    break
+
+    else:
+        print(f"download {file_}")
+        response = request.urlopen(url)
+        with open(file_, "wb") as f:
+            while True:
+                swrite(".")
+                chunk = response.read(_CHUNK)
+                m.update(chunk)
+                if not chunk:
+                    break
+                f.write(chunk)
+    file_sha = m.hexdigest()
+    if file_sha != sha:
+        raise ValueError(f"sha1sum of {file_} {file_sha} != {sha}")
+    print(" verified")
+    return file_
+
+
+def get(url, sha):
+    file_ = download_url(url, sha)
+    run(["tar", "xfz", file_])
+
+
+def get_tkrzw(c):
+    get(c["tkrzw_url"], c["tkrzw_sha"])
+
+
+def build_tkrzw():
+    c = make_config()
+    get_tkrzw(c)
+    with chdir(c["tkrzw_library"]):
+        run("./configure --enable-static --disable-shared", shell=True)
+        run(["make", "-j2"])
+        run(["make", "check"])
+        run(["make", "install"])
+
+
+def get_tkrzw_python(c):
+    get(c["tkrzw_python_url"], c["tkrzw_python_sha"])
+
+
+def pyenv():
+    version = sys.argv[2]
+    run("curl https://pyenv.run | bash", shell=True)
+    run(f"pyenv install {version}", shell=True)
+
+
+def auditwheel(c):
+    python = c["python"]
+    run([python, "-m", "auditwheel", "repair", c["dist_path"]], shell=True)
+    run([python, "-m", "auditwheel", "show", c["wheelhouse_path"]], shell=True)
+
+
+def fixup_setup(c):
+    with open("setup.py", "r", encoding="UTF-8") as rf:
+        with open("setup.py.out", "w", encoding="UTF-8") as wf:
+            for line in rf.readlines():
+                if line.startswith("package_version"):
+                    tpv = c["tkrzw_python_version"]
+                    wf.write(f"package_version = '{tpv}'\n")
+                else:
+                    wf.write(line)
+    os.unlink("setup.py")
+    os.rename("setup.py.out", "setup.py")
+
+
+def build_wheel():
+    version = sys.argv[2]
+    c = make_config(version)
+    python = c["python"]
+    pip_install(python, "pip")
+    pip_install(python, ["build", "auditwheel"])
+    get_tkrzw_python(c)
+    path = c["tkrzw_python"]
+    with chdir(path):
+        fixup_setup(c)
+        run([python, "-m", "build", "--wheel"], shell=True)
+        auditwheel(c)
+
+
+def test():
+    c = make_config()
+    fixup_setup(c)
+
+
+def main():
+    action = sys.argv[1]
+    globals()[action]()
+
+
+if __name__ == "__main__":
+    main()
