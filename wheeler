@@ -17,10 +17,14 @@ def make_cp(version):
 
 
 def make_config(version=None):
+    tkrzw_upload = os.environ["TKRZW_UPLOAD"]
     tkrzw_version = os.environ["TKRZW_VERSION"]
     tkrzw_python_version = os.environ["TKRZW_PYTHON_VERSION"]
+    tkrzw_python_revision = f"{tkrzw_python_version}.{tkrzw_upload}"
     config = {
+        "tkrzw_sdist": f"dist/tkrzw-{tkrzw_python_revision}.tar.gz",
         "tkrzw_python_version": tkrzw_python_version,
+        "tkrzw_python_revision": tkrzw_python_revision,
         "tkrzw_python_url": f"https://dbmx.net/tkrzw/pkg-python/tkrzw-python-{tkrzw_python_version}.tar.gz",
         "tkrzw_python_sha": os.environ["TKRZW_PYTHON_SHA"],
         "tkrzw_python": f"tkrzw-python-{tkrzw_python_version}",
@@ -34,8 +38,8 @@ def make_config(version=None):
         config.update(
             {
                 "python": get_python(version),
-                "dist_path": f"./dist/tkrzw-{tkrzw_python_version}-{cp}-{cp}-linux_x86_64.whl",
-                "wheelhouse_path": f"./wheelhouse/tkrzw-{tkrzw_python_version}-{cp}-{cp}-musllinux_1_2_x86_64.whl",
+                "dist_path": f"./dist/tkrzw-{tkrzw_python_revision}-{cp}-{cp}-linux_x86_64.whl",
+                "wheelhouse_path": f"./wheelhouse/tkrzw-{tkrzw_python_revision}-{cp}-{cp}-musllinux_1_2_x86_64.whl",
             }
         )
     return config
@@ -166,16 +170,14 @@ def auditwheel(c):
 
 
 def fixup_setup(c):
-    with open("setup.py", "r", encoding="UTF-8") as rf:
-        with open("setup.py.out", "w", encoding="UTF-8") as wf:
+    with open("../setup.py", "r", encoding="UTF-8") as rf:
+        with open("setup.py", "w", encoding="UTF-8") as wf:
             for line in rf.readlines():
                 if line.startswith("package_version"):
-                    tpv = c["tkrzw_python_version"]
-                    wf.write(f"package_version = '{tpv}'\n")
+                    rev = c["tkrzw_python_revision"]
+                    wf.write(f"package_version = '{rev}'\n")
                 else:
                     wf.write(line)
-    os.unlink("setup.py")
-    os.rename("setup.py.out", "setup.py")
 
 
 def build_wheel():
@@ -192,9 +194,14 @@ def build_wheel():
         auditwheel(c)
 
 
-def test():
+def sdist():
     c = make_config()
-    fixup_setup(c)
+    get_tkrzw_python(c)
+    path = c["tkrzw_python"]
+    with chdir(path):
+        fixup_setup(c)
+        run(["python3", "setup.py", "sdist"])
+        run(["twine", "upload", "--non-interactive", c["tkrzw_sdist"]])
 
 
 def main():

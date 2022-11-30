@@ -7,12 +7,48 @@ env:
   TKRZW_SHA: ebf6fe006d1c4d652bcecdc51c3513f3b9d90d43
   TKRZW_PYTHON_VERSION: 0.1.28
   TKRZW_PYTHON_SHA: 3f368b11c5d0142f838024f267c60bb1f958db77
+  TKRZW_UPLOAD: 4
   ALPINE_VERSION: v3.17
   LDFLAGS: "-flto"
   PYENV_ROOT: /home/runner/pyenv/root
+  PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
 
 jobs:
+  sdist:
+    environment: pypi-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      ### Caching ###
+      - name: Cache tkrzw python
+        id: tkrzw-python-tar
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/tkrzw-python-${{ env.TKRZW_PYTHON_VERSION }}.tar.gz
+          key: tkrzw-python-tar-${{ env.TKRZW_PYTHON_VERSION }}
+
+      - name: Cache sdist local
+        id: sdist-local
+        uses: actions/cache@v3
+        with:
+          path: /home/runner/.local
+          key: sdist-local
+
+      ### Upload ###
+      - name: Upload tkrzw python
+        if: steps.alpine-library-build.outputs.cache-hit != 'true'
+        env:
+          TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_REPOSITORY: ${{ secrets.TWINE_REPOSITORY }}
+        run: |
+          pip install --user -U twine
+          ./wheeler sdist
+        shell: bash
+
   alpine-library:
+    needs: sdist
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -45,7 +81,7 @@ jobs:
           mkdir -p ${{ github.workspace }}/pkgs-${{ env.ALPINE_VERSION }}
         shell: bash
 
-      - name: Cache tkrzw python
+      - name: Cache tkrzw
         if: steps.alpine-library-build.outputs.cache-hit != 'true'
         id: tkrzw-tar
         uses: actions/cache@v3
