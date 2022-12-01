@@ -22,6 +22,7 @@ def make_config(version=None):
     tkrzw_python_version = os.environ["TKRZW_PYTHON_VERSION"]
     tkrzw_python_revision = f"{tkrzw_python_version}.{tkrzw_upload}"
     config = {
+        "noupload": os.environ["TKRZW_NOUPLOAD"].lower() == "true",
         "tkrzw_sdist": f"dist/tkrzw-{tkrzw_python_revision}.tar.gz",
         "tkrzw_python_version": tkrzw_python_version,
         "tkrzw_python_revision": tkrzw_python_revision,
@@ -194,6 +195,11 @@ def build_wheel():
         auditwheel(c)
 
 
+def upload(c, file_):
+    if not c["noupload"]:
+        run(["twine", "upload", "--non-interactive", file_])
+
+
 def sdist():
     c = make_config()
     get_tkrzw_python(c)
@@ -201,7 +207,7 @@ def sdist():
     with chdir(path):
         fixup_setup(c)
         run(["python3", "setup.py", "sdist"])
-        run(["twine", "upload", "--non-interactive", c["tkrzw_sdist"]])
+        upload(c, c["tkrzw_sdist"])
 
 
 def main():

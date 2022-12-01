@@ -8,6 +8,7 @@ env:
   TKRZW_PYTHON_VERSION: 0.1.28
   TKRZW_PYTHON_SHA: 3f368b11c5d0142f838024f267c60bb1f958db77
   TKRZW_UPLOAD: 4
+  TKRZW_NOUPLOAD: true
   ALPINE_VERSION: v3.17
   LDFLAGS: "-flto"
   PYENV_ROOT: /home/runner/pyenv/root
@@ -16,7 +17,7 @@ env:
 jobs:
   sdist:
     environment: pypi-test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
 
@@ -49,7 +50,7 @@ jobs:
 
   alpine-library:
     needs: sdist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
 
@@ -114,7 +115,7 @@ jobs:
 
   alpine-wheel:
     needs: alpine-library
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         version: [3.8.13, 3.9.13, 3.10.6]
