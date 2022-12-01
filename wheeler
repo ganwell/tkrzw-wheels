@@ -16,39 +16,40 @@ def make_cp(version):
     return f"cp{sversion[0]}{sversion[1]}"
 
 
-def make_config(version=None):
-    tkrzw_upload = os.environ["TKRZW_UPLOAD"]
+def make_config(python_version=None):
+    upload = os.environ["TKRZW_UPLOAD"]
     tkrzw_version = os.environ["TKRZW_VERSION"]
-    tkrzw_python_version = os.environ["TKRZW_PYTHON_VERSION"]
-    tkrzw_python_revision = f"{tkrzw_python_version}.{tkrzw_upload}"
+    python_module_version = os.environ["TKRZW_PYTHON_VERSION"]
+    python_module_revision = f"{python_version}.{upload}"
     config = {
         "noupload": os.environ["TKRZW_NOUPLOAD"].lower() == "true",
-        "tkrzw_sdist": f"dist/tkrzw-{tkrzw_python_revision}.tar.gz",
-        "tkrzw_python_version": tkrzw_python_version,
-        "tkrzw_python_revision": tkrzw_python_revision,
-        "tkrzw_python_url": f"https://dbmx.net/tkrzw/pkg-python/tkrzw-python-{tkrzw_python_version}.tar.gz",
-        "tkrzw_python_sha": os.environ["TKRZW_PYTHON_SHA"],
-        "tkrzw_python": f"tkrzw-python-{tkrzw_python_version}",
+        "sdist": f"dist/tkrzw-{python_module_revision}.tar.gz",
+        "python_module_version": python_module_version,
+        "python_module_revision": python_module_revision,
+        "python_url": f"https://dbmx.net/tkrzw/pkg-python/tkrzw-python-{python_module_version}.tar.gz",
+        "python_sha": os.environ["TKRZW_PYTHON_SHA"],
+        "python_src": f"tkrzw-python-{python_module_version}",
         "tkrzw_version": tkrzw_version,
-        "tkrzw_library": f"tkrzw-{tkrzw_version}",
-        "tkrzw_url": f"https://dbmx.net/tkrzw/pkg/tkrzw-{tkrzw_version}.tar.gz",
-        "tkrzw_sha": os.environ["TKRZW_SHA"],
+        "library": f"tkrzw-{tkrzw_version}",
+        "url": f"https://dbmx.net/tkrzw/pkg/tkrzw-{tkrzw_version}.tar.gz",
+        "sha": os.environ["TKRZW_SHA"],
     }
-    if version:
-        cp = make_cp(version)
+    if python_version:
+        cp = make_cp(python_version)
         config.update(
             {
-                "python": get_python(version),
-                "dist_path": f"./dist/tkrzw-{tkrzw_python_revision}-{cp}-{cp}-linux_x86_64.whl",
-                "wheelhouse_path": f"./wheelhouse/tkrzw-{tkrzw_python_revision}-{cp}-{cp}-musllinux_1_2_x86_64.whl",
+                "python_version": python_version,
+                "python_path": get_python_path(python_version),
+                "dist_path": f"./dist/tkrzw-{python_module_revision}-{cp}-{cp}-linux_x86_64.whl",
+                "wheelhouse_path": f"./wheelhouse/tkrzw-{python_module_revision}-{cp}-{cp}-musllinux_1_2_x86_64.whl",
             }
         )
     return config
 
 
-def get_python(version):
+def get_python_path(python_version):
     root = os.environ["PYENV_ROOT"]
-    return f"{root}/versions/{version}/bin/python3"
+    return f"{root}/versions/{python_version}/bin/python3"
 
 
 def pip_install(python, packages):
@@ -141,13 +142,13 @@ def get(url, sha):
 
 
 def get_tkrzw(c):
-    get(c["tkrzw_url"], c["tkrzw_sha"])
+    get(c["url"], c["sha"])
 
 
 def build_tkrzw():
     c = make_config()
     get_tkrzw(c)
-    with chdir(c["tkrzw_library"]):
+    with chdir(c["library"]):
         run("./configure --enable-static --disable-shared", shell=True)
         run(["make", "-j2"])
         run(["make", "check"])
@@ -155,17 +156,17 @@ def build_tkrzw():
 
 
 def get_tkrzw_python(c):
-    get(c["tkrzw_python_url"], c["tkrzw_python_sha"])
+    get(c["python_url"], c["python_sha"])
 
 
 def pyenv():
-    version = sys.argv[2]
+    python_version = sys.argv[2]
     run("curl https://pyenv.run | bash", shell=True)
-    run(f"pyenv install {version}", shell=True)
+    run(f"pyenv install {python_version}", shell=True)
 
 
 def auditwheel(c):
-    python = c["python"]
+    python = c["python_path"]
     run([python, "-m", "auditwheel", "repair", c["dist_path"]], shell=True)
     run([python, "-m", "auditwheel", "show", c["wheelhouse_path"]], shell=True)
 
@@ -175,20 +176,20 @@ def fixup_setup(c):
         with open("setup.py", "w", encoding="UTF-8") as wf:
             for line in rf.readlines():
                 if line.startswith("package_version"):
-                    rev = c["tkrzw_python_revision"]
+                    rev = c["python_module_revision"]
                     wf.write(f"package_version = '{rev}'\n")
                 else:
                     wf.write(line)
 
 
 def build_wheel():
-    version = sys.argv[2]
-    c = make_config(version)
-    python = c["python"]
+    python_version = sys.argv[2]
+    c = make_config(python_version)
+    python = c["python_path"]
     pip_install(python, "pip")
     pip_install(python, ["build", "auditwheel"])
     get_tkrzw_python(c)
-    path = c["tkrzw_python"]
+    path = c["python_src"]
     with chdir(path):
         fixup_setup(c)
         run([python, "-m", "build", "--wheel"], shell=True)
@@ -203,11 +204,11 @@ def upload(c, file_):
 def sdist():
     c = make_config()
     get_tkrzw_python(c)
-    path = c["tkrzw_python"]
+    path = c["python_src"]
     with chdir(path):
         fixup_setup(c)
         run(["python3", "setup.py", "sdist"])
-        upload(c, c["tkrzw_sdist"])
+        upload(c, c["sdist"])
 
 
 def main():
