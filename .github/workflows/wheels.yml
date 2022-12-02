@@ -8,14 +8,19 @@ env:
   TKRZW_PYTHON_VERSION: 0.1.28
   TKRZW_PYTHON_SHA: 3f368b11c5d0142f838024f267c60bb1f958db77
   TKRZW_UPLOAD: 4
-  TKRZW_NOUPLOAD: true
+  TKRZW_NOUPLOAD: false
+  TKRZW_PREFIX: /home/runner/tkrzw
   ALPINE_VERSION: v3.17
   LDFLAGS: "-flto"
   PYENV_ROOT: /home/runner/pyenv/root
   PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+  UBUNTU_CUR: ubuntu-22.04
+  UBUNTU_OLD: ubuntu-18.04
+
 
 jobs:
   sdist:
+    if: ${{ false }}
     environment: pypi-test
     runs-on: ubuntu-22.04
     steps:
@@ -38,18 +43,18 @@ jobs:
 
       ### Upload ###
       - name: Upload tkrzw python
-        if: steps.alpine-library-build.outputs.cache-hit != 'true'
         env:
           TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
           TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
           TWINE_REPOSITORY: ${{ secrets.TWINE_REPOSITORY }}
         run: |
-          pip install --user -U twine
+          pip install --user -U pip
+          pip install --user -U twine auditwheel
           ./wheeler sdist
         shell: bash
 
   alpine-library:
-    needs: sdist
+    #needs: sdist
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
@@ -70,11 +75,11 @@ jobs:
 
       - name: Cache alpine pkgs
         if: steps.alpine-library-build.outputs.cache-hit != 'true'
-        id: alpine-pkgs
+        id: alpine-sdist-pkgs
         uses: actions/cache@v3
         with:
           path: ${{ github.workspace }}/pkgs-${{ env.ALPINE_VERSION }}
-          key: alpine-pkgs-${{ env.ALPINE_VERSION }}
+          key: alpine-sdist-pkgs-${{ env.ALPINE_VERSION }}
 
       - name: Create alpine pkgs dir
         if: steps.alpine-library-build.outputs.cache-hit != 'true'
@@ -90,7 +95,7 @@ jobs:
           path: ${{ github.workspace }}/tkrzw-${{ env.TKRZW_VERSION }}.tar.gz
           key: tkrzw-tar-${{ env.TKRZW_VERSION }}
 
-      ### Setup ###
+      ### Build ###
       - name: Setup latest Alpine Linux
         id: alpine-setup
         if: steps.alpine-library-build.outputs.cache-hit != 'true'
@@ -110,15 +115,16 @@ jobs:
       - name: Get and build library
         if: steps.alpine-library-build.outputs.cache-hit != 'true'
         run: |
-          ./wheeler build_tkrzw
+          ./wheeler build_tkrzw /usr/local
         shell: alpine.sh {0}
 
   alpine-wheel:
     needs: alpine-library
+    environment: pypi-test
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        version: [3.8.13, 3.9.13, 3.10.6]
+        version: [3.7.15, 3.8.15, 3.9.15, 3.10.8, 3.11.0]
     steps:
       - uses: actions/checkout@v3
 
@@ -136,11 +142,11 @@ jobs:
           key: alpine-library-${{ env.TKRZW_VERSION }}
 
       - name: Cache alpine pkgs
-        id: alpine-pkgs
+        id: alpine-wheel-pkgs
         uses: actions/cache@v3
         with:
           path: ${{ github.workspace }}/pkgs-${{ env.ALPINE_VERSION }}
-          key: alpine-pkgs-${{ env.ALPINE_VERSION }}
+          key: alpine-wheel-pkgs-${{ env.ALPINE_VERSION }}
 
       - name: Create alpine pkgs dir
         if: steps.alpine-pkgs.outputs.cache-hit != 'true'
@@ -168,7 +174,7 @@ jobs:
           path: ${{ github.workspace }}/tkrzw-python-${{ env.TKRZW_PYTHON_VERSION }}.tar.gz
           key: tkrzw-python-tar-${{ env.TKRZW_PYTHON_VERSION }}
 
-      ### Setup ###
+      ### Build ###
       - name: Setup latest Alpine Linux
         id: alpine-setup
         uses: jirutka/setup-alpine@v1
@@ -208,3 +214,130 @@ jobs:
         run: |
           ./wheeler build_wheel ${{ matrix.version }}
         shell: alpine.sh {0}
+
+      ### Upload ###
+      - name: Upload tkrzw python
+        env:
+          TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_REPOSITORY: ${{ secrets.TWINE_REPOSITORY }}
+        run: |
+          ./wheeler wheel ${{ matrix.version }} musllinux_1_2_x86_64
+        shell: alpine.sh {0}
+
+  manylinux-library:
+    #needs: sdist
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v3
+
+      ## Caching ###
+      - name: Cache manylinux library build
+        id: manylinux-library-build
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.TKRZW_PREFIX }}
+          key: manylinux-library-${{ env.TKRZW_VERSION }}
+
+      - name: Cache tkrzw
+        if: steps.manylinux-library-build.outputs.cache-hit != 'true'
+        id: tkrzw-tar
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/tkrzw-${{ env.TKRZW_VERSION }}.tar.gz
+          key: tkrzw-tar-${{ env.TKRZW_VERSION }}
+
+      ### Build ###
+      - name: Install build essential
+        if: steps.manylinux-library-build.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential
+        shell: bash
+
+      - name: Get and build library
+        if: steps.manylinux-library-build.outputs.cache-hit != 'true'
+        run: |
+          ./wheeler build_tkrzw ${{ env.TKRZW_PREFIX }}
+        shell: bash
+
+  manylinux-wheel:
+    needs: manylinux-library
+    environment: pypi-test
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        version: [3.7.15, 3.8.15, 3.9.15, 3.10.8, 3.11.0]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set pyenv path
+        run: |
+          echo "${{ env.TKRZW_PREFIX }}/bin:$PYENV_ROOT/bin" >> $GITHUB_PATH
+        shell: bash
+
+      ### Caching ###
+      - name: Cache manylinux library build
+        id: manylinux-library-build
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.TKRZW_PREFIX }}
+          key: manylinux-library-${{ env.TKRZW_VERSION }}
+
+      - name: Cache manylinux pyenv
+        id: manylinux-pyenv
+        uses: actions/cache@v3
+        with:
+          path: /home/runner/pyenv/root
+          key: manylinux-pyenv-${{ matrix.version }}
+
+      - name: Cache tkrzw python
+        id: tkrzw-python-tar
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/tkrzw-python-${{ env.TKRZW_PYTHON_VERSION }}.tar.gz
+          key: tkrzw-python-tar-${{ env.TKRZW_PYTHON_VERSION }}
+
+      ### Build ###
+      - name: Setup build as root
+        run: |
+            sudo cp ${{ github.workspace }}/patchelf /usr/local/bin
+            sudo apt-get update -y
+            sudo apt-get install -y \
+            make \
+            build-essential \
+            libssl-dev zlib1g-dev \
+            libbz2-dev \
+            libreadline-dev \
+            libsqlite3-dev \
+            wget \
+            curl \
+            llvm \
+            libncursesw5-dev \
+            xz-utils \
+            tk-dev \
+            libxml2-dev \
+            libxmlsec1-dev \
+            libffi-dev liblzma-dev
+        shell: bash
+
+      - name: Install python version
+        if: steps.manylinux-pyenv.outputs.cache-hit != 'true'
+        run: |
+          ./wheeler pyenv ${{ matrix.version }} 3.10.8
+        shell: bash
+
+      - name: Build wheel
+        run: |
+          ./wheeler build_wheel ${{ matrix.version }}
+        shell: bash
+
+      ### Upload ###
+      - name: Upload tkrzw python
+        env:
+          TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_REPOSITORY: ${{ secrets.TWINE_REPOSITORY }}
+        run: |
+          ./wheeler wheel ${{ matrix.version }} manylinux_2_27_x86_64
+        shell: bash

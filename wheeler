@@ -6,7 +6,7 @@ import sys
 import urllib.request as request
 from contextlib import contextmanager
 from pathlib import Path
-from subprocess import DEVNULL, run as srun
+from subprocess import DEVNULL, CalledProcessError, run as srun
 
 _CHUNK = 16 * 1024
 
@@ -16,7 +16,7 @@ def make_cp(version):
     return f"cp{sversion[0]}{sversion[1]}"
 
 
-def make_config(python_version=None):
+def make_config(python_version=None, tag=None):
     upload = os.environ["TKRZW_UPLOAD"]
     tkrzw_version = os.environ["TKRZW_VERSION"]
     python_module_version = os.environ["TKRZW_PYTHON_VERSION"]
@@ -41,9 +41,11 @@ def make_config(python_version=None):
                 "python_version": python_version,
                 "python_path": get_python_path(python_version),
                 "dist_path": f"./dist/tkrzw-{python_module_revision}-{cp}-{cp}-linux_x86_64.whl",
-                "wheelhouse_path": f"./wheelhouse/tkrzw-{python_module_revision}-{cp}-{cp}-musllinux_1_2_x86_64.whl",
             }
         )
+        if tag:
+            path = f"./wheelhouse/tkrzw-{python_module_revision}-{cp}-{cp}-{tag}.whl"
+            config.update({"tag": tag, "wheelhouse_path": path})
     return config
 
 
@@ -146,13 +148,21 @@ def get_tkrzw(c):
 
 
 def build_tkrzw():
+    prefix = sys.argv[2]
     c = make_config()
     get_tkrzw(c)
     with chdir(c["library"]):
-        run("./configure --enable-static --disable-shared", shell=True)
+        run(
+            f"./configure --enable-static --disable-shared --prefix {prefix}",
+            shell=True,
+        )
         run(["make", "-j2"])
         run(["make", "check"])
-        run(["make", "install"])
+        try:
+            run(["make", "install"])
+        except CalledProcessError:
+            # sudo make me a sandwich
+            run(["sudo", "make", "install"])
 
 
 def get_tkrzw_python(c):
@@ -163,11 +173,26 @@ def pyenv():
     python_version = sys.argv[2]
     run("curl https://pyenv.run | bash", shell=True)
     run(f"pyenv install {python_version}", shell=True)
+    if len(sys.argv) > 3:
+        python_version = sys.argv[2]
+        run(f"pyenv install {python_version}", shell=True)
 
 
-def auditwheel(c):
-    python = c["python_path"]
-    run([python, "-m", "auditwheel", "repair", c["dist_path"]], shell=True)
+def auditwheel(c, python):
+    tag = c["tag"]
+    run([python, "-m", "auditwheel", "show", c["dist_path"]], shell=True)
+    run(
+        [
+            python,
+            "-m",
+            "auditwheel",
+            "repair",
+            "--plat",
+            tag,
+            c["dist_path"],
+        ],
+        shell=True,
+    )
     run([python, "-m", "auditwheel", "show", c["wheelhouse_path"]], shell=True)
 
 
@@ -187,18 +212,19 @@ def build_wheel():
     c = make_config(python_version)
     python = c["python_path"]
     pip_install(python, "pip")
-    pip_install(python, ["build", "auditwheel"])
+    pip_install(python, "build")
     get_tkrzw_python(c)
     path = c["python_src"]
     with chdir(path):
         fixup_setup(c)
         run([python, "-m", "build", "--wheel"], shell=True)
-        auditwheel(c)
 
 
-def upload(c, file_):
+def upload(c, python, file_):
+    repo = os.environ["TWINE_REPOSITORY"]
+    print(f"repo: {repo}")
     if not c["noupload"]:
-        run(["twine", "upload", "--non-interactive", file_])
+        run([python, "-m", "twine", "upload", "--non-interactive", "-r", repo, file_])
 
 
 def sdist():
@@ -208,7 +234,24 @@ def sdist():
     with chdir(path):
         fixup_setup(c)
         run(["python3", "setup.py", "sdist"])
-        upload(c, c["sdist"])
+        upload(c, "python3", c["sdist"])
+
+
+def wheel():
+    python_version = sys.argv[2]
+    tag = sys.argv[3]
+    c = make_config(python_version, tag)
+    if len(sys.argv) > 4:
+        python = get_python_path(sys.argv[4])
+    else:
+        python = c["python_path"]
+    get_tkrzw_python(c)
+    path = c["python_src"]
+    pip_install(python, "pip")
+    pip_install(python, ["twine", "auditwheel"])
+    with chdir(path):
+        auditwheel(c, python)
+        upload(c, python, c["wheelhouse_path"])
 
 
 def main():

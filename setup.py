@@ -48,7 +48,7 @@ durability.
 We build the following wheels:
 
 - musllinux_1_2_x86_64
-- TODO: manylinux_x86_64
+- manylinux_2_27_x86_64
 - TODO: macos
 - TODO: windows
 
@@ -83,7 +83,9 @@ def parse_build_flags(cmd_args):
             flag = item[0:2]
             result.setdefault(flag, []).append(item[2:])
     except FileNotFoundError:
-        pass
+        import sys
+
+        sys.stderr.write(f"Warning: {cmd_args[0]} not found")
     return result
 
 
