@@ -35,16 +35,21 @@ def make_config(python_version=None, tag=None):
         "sha": os.environ["TKRZW_SHA"],
     }
     if python_version:
+        em = ""
+        if python_version.startswith("3.7."):
+            em = "m"
         cp = make_cp(python_version)
         config.update(
             {
                 "python_version": python_version,
                 "python_path": get_python_path(python_version),
-                "dist_path": f"./dist/tkrzw-{python_module_revision}-{cp}-{cp}-linux_x86_64.whl",
+                "dist_path": f"./dist/tkrzw-{python_module_revision}-{cp}-{cp}{em}-linux_x86_64.whl",
             }
         )
         if tag:
-            path = f"./wheelhouse/tkrzw-{python_module_revision}-{cp}-{cp}-{tag}.whl"
+            path = (
+                f"./wheelhouse/tkrzw-{python_module_revision}-{cp}-{cp}{em}-{tag}.whl"
+            )
             config.update({"tag": tag, "wheelhouse_path": path})
     return config
 
@@ -174,8 +179,9 @@ def pyenv():
     run("curl https://pyenv.run | bash", shell=True)
     run(f"pyenv install {python_version}", shell=True)
     if len(sys.argv) > 3:
-        python_version = sys.argv[2]
-        run(f"pyenv install {python_version}", shell=True)
+        python_version_audit = sys.argv[3]
+        if python_version != python_version_audit:
+            run(f"pyenv install {python_version_audit}", shell=True)
 
 
 def auditwheel(c, python):

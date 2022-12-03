@@ -8,7 +8,7 @@ env:
   TKRZW_PYTHON_VERSION: 0.1.28
   TKRZW_PYTHON_SHA: 3f368b11c5d0142f838024f267c60bb1f958db77
   TKRZW_UPLOAD: 4
-  TKRZW_NOUPLOAD: false
+  TKRZW_NOUPLOAD: true
   TKRZW_PREFIX: /home/runner/tkrzw
   ALPINE_VERSION: v3.17
   LDFLAGS: "-flto"
@@ -123,6 +123,7 @@ jobs:
     environment: pypi-test
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         version: [3.7.15, 3.8.15, 3.9.15, 3.10.8, 3.11.0]
     steps:
@@ -266,6 +267,7 @@ jobs:
     environment: pypi-test
     runs-on: ubuntu-18.04
     strategy:
+      fail-fast: false
       matrix:
         version: [3.7.15, 3.8.15, 3.9.15, 3.10.8, 3.11.0]
     steps:
