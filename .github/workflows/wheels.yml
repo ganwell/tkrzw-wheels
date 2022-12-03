@@ -7,8 +7,8 @@ env:
   TKRZW_SHA: ebf6fe006d1c4d652bcecdc51c3513f3b9d90d43
   TKRZW_PYTHON_VERSION: 0.1.28
   TKRZW_PYTHON_SHA: 3f368b11c5d0142f838024f267c60bb1f958db77
-  TKRZW_UPLOAD: 4
-  TKRZW_NOUPLOAD: true
+  TKRZW_UPLOAD: 6
+  TKRZW_NOUPLOAD: false
   TKRZW_PREFIX: /home/runner/tkrzw
   ALPINE_VERSION: v3.17
   LDFLAGS: "-flto"
@@ -20,7 +20,6 @@ env:
 
 jobs:
   sdist:
-    if: ${{ false }}
     environment: pypi-test
     runs-on: ubuntu-22.04
     steps:
@@ -54,7 +53,7 @@ jobs:
         shell: bash
 
   alpine-library:
-    #needs: sdist
+    needs: sdist
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
@@ -227,7 +226,7 @@ jobs:
         shell: alpine.sh {0}
 
   manylinux-library:
-    #needs: sdist
+    needs: sdist
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v3

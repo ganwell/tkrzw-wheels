@@ -20,7 +20,7 @@ def make_config(python_version=None, tag=None):
     upload = os.environ["TKRZW_UPLOAD"]
     tkrzw_version = os.environ["TKRZW_VERSION"]
     python_module_version = os.environ["TKRZW_PYTHON_VERSION"]
-    python_module_revision = f"{python_version}.{upload}"
+    python_module_revision = f"{python_module_version}.{upload}"
     config = {
         "noupload": os.environ["TKRZW_NOUPLOAD"].lower() == "true",
         "sdist": f"dist/tkrzw-{python_module_revision}.tar.gz",
