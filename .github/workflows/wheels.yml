@@ -8,7 +8,7 @@ env:
   TKRZW_PYTHON_VERSION: 0.1.28
   TKRZW_PYTHON_SHA: 3f368b11c5d0142f838024f267c60bb1f958db77
   TKRZW_UPLOAD: 6
-  TKRZW_NOUPLOAD: false
+  TKRZW_NOUPLOAD: true
   TKRZW_PREFIX: /home/runner/tkrzw
   ALPINE_VERSION: v3.17
   LDFLAGS: "-flto"
@@ -48,12 +48,11 @@ jobs:
           TWINE_REPOSITORY: ${{ secrets.TWINE_REPOSITORY }}
         run: |
           pip install --user -U pip
-          pip install --user -U twine auditwheel
+          [ TKRZW_NOUPLOAD == "true"] || pip install --user -U twine auditwheel
           ./wheeler sdist
         shell: bash
 
   alpine-library:
-    needs: sdist
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
@@ -118,7 +117,7 @@ jobs:
         shell: alpine.sh {0}
 
   alpine-wheel:
-    needs: alpine-library
+    needs: [sdist, alpine-library]
     environment: pypi-test
     runs-on: ubuntu-22.04
     strategy:
@@ -226,7 +225,6 @@ jobs:
         shell: alpine.sh {0}
 
   manylinux-library:
-    needs: sdist
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v3
@@ -262,7 +260,7 @@ jobs:
         shell: bash
 
   manylinux-wheel:
-    needs: manylinux-library
+    needs: [sdist, manylinux-library]
     environment: pypi-test
     runs-on: ubuntu-18.04
     strategy:

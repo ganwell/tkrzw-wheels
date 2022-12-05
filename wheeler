@@ -158,7 +158,7 @@ def build_tkrzw():
     get_tkrzw(c)
     with chdir(c["library"]):
         run(
-            f"./configure --enable-static --disable-shared --prefix {prefix}",
+            f"./configure --enable-static --disable-shared --enable-most-features --prefix {prefix}",
             shell=True,
         )
         run(["make", "-j2"])
