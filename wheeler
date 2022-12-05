@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import platform
 import sys
 import urllib.request as request
 from contextlib import contextmanager
@@ -9,6 +10,7 @@ from pathlib import Path
 from subprocess import DEVNULL, CalledProcessError, run as srun
 
 _CHUNK = 16 * 1024
+_system = platform.system()
 
 
 def make_cp(version):
@@ -39,18 +41,22 @@ def make_config(python_version=None, tag=None):
         if python_version.startswith("3.7."):
             em = "m"
         cp = make_cp(python_version)
+        if _system == "Linux":
+            dist_path = (
+                f"./dist/tkrzw-{python_module_revision}-{cp}-{cp}{em}-linux_x86_64.whl"
+            )
+            if tag:
+                path = f"./wheelhouse/tkrzw-{python_module_revision}-{cp}-{cp}{em}-{tag}.whl"
+                config.update({"tag": tag, "wheelhouse_path": path})
+        elif _system == "Darwin":
+            dist_path = f"./dist/tkrzw-{python_module_revision}-{cp}-{cp}{em}-macosx_12_0_x86_64.whl"
         config.update(
             {
                 "python_version": python_version,
                 "python_path": get_python_path(python_version),
-                "dist_path": f"./dist/tkrzw-{python_module_revision}-{cp}-{cp}{em}-linux_x86_64.whl",
+                "dist_path": dist_path,
             }
         )
-        if tag:
-            path = (
-                f"./wheelhouse/tkrzw-{python_module_revision}-{cp}-{cp}{em}-{tag}.whl"
-            )
-            config.update({"tag": tag, "wheelhouse_path": path})
     return config
 
 
@@ -157,12 +163,18 @@ def build_tkrzw():
     c = make_config()
     get_tkrzw(c)
     with chdir(c["library"]):
-        run(
-            f"./configure --enable-static --disable-shared --enable-most-features --prefix {prefix}",
-            shell=True,
-        )
+        if _system == "Linux":
+            run(
+                f"./configure --enable-static --disable-shared --enable-most-features --prefix {prefix}",
+                shell=True,
+            )
+        else:
+            run(
+                f"./configure --enable-most-features --prefix {prefix}",
+                shell=True,
+            )
         run(["make", "-j2"])
-        run(["make", "check"])
+        # run(["make", "check"])
         try:
             run(["make", "install"])
         except CalledProcessError:
@@ -254,10 +266,14 @@ def wheel():
     get_tkrzw_python(c)
     path = c["python_src"]
     pip_install(python, "pip")
-    pip_install(python, ["twine", "auditwheel"])
     with chdir(path):
-        auditwheel(c, python)
-        upload(c, python, c["wheelhouse_path"])
+        if _system == "Linux":
+            pip_install(python, ["twine", "auditwheel"])
+            auditwheel(c, python)
+            upload(c, python, c["wheelhouse_path"])
+        else:
+            pip_install(python, ["twine"])
+            upload(c, python, c["dist_path"])
 
 
 def main():

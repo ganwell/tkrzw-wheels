@@ -287,7 +287,7 @@ jobs:
         id: manylinux-pyenv
         uses: actions/cache@v3
         with:
-          path: /home/runner/pyenv/root
+          path: ${{ env.PYENV_ROOT }}
           key: manylinux-pyenv-${{ matrix.version }}
 
       - name: Cache tkrzw python
@@ -322,6 +322,103 @@ jobs:
 
       - name: Install python version
         if: steps.manylinux-pyenv.outputs.cache-hit != 'true'
+        run: |
+          ./wheeler pyenv ${{ matrix.version }} 3.10.8
+        shell: bash
+
+      - name: Build wheel
+        run: |
+          ./wheeler build_wheel ${{ matrix.version }}
+        shell: bash
+
+      ### Upload ###
+      - name: Upload tkrzw python
+        env:
+          TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_REPOSITORY: ${{ secrets.TWINE_REPOSITORY }}
+        run: |
+          ./wheeler wheel ${{ matrix.version }} manylinux_2_27_x86_64
+        shell: bash
+
+  mac-library:
+    runs-on: macos-12
+    env:
+      TKRZW_PREFIX: /Users/runner/tkrzw
+    steps:
+      - uses: actions/checkout@v3
+
+      ## Caching ###
+      - name: Cache mac library build
+        id: mac-library-build
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.TKRZW_PREFIX }}
+          key: mac-library-${{ env.TKRZW_VERSION }}
+
+      - name: Cache tkrzw
+        if: steps.mac-library-build.outputs.cache-hit != 'true'
+        id: mac-tkrzw-tar
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/tkrzw-${{ env.TKRZW_VERSION }}.tar.gz
+          key: mac-tkrzw-tar-${{ env.TKRZW_VERSION }}
+
+      - name: Get and build library
+        if: steps.mac-library-build.outputs.cache-hit != 'true'
+        run: |
+          ./wheeler build_tkrzw ${{ env.TKRZW_PREFIX }}
+        shell: bash
+
+  mac-wheel:
+    needs: [sdist, mac-library]
+    environment: pypi-test
+    runs-on: macos-12
+    env:
+      TKRZW_PREFIX: /Users/runner/tkrzw
+      PYENV_ROOT: /Users/runner/pyenv/root
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [3.7.15, 3.8.15, 3.9.15, 3.10.8, 3.11.0]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set pyenv path
+        run: |
+          echo "${{ env.TKRZW_PREFIX }}/bin:$PYENV_ROOT/bin" >> $GITHUB_PATH
+        shell: bash
+
+      ### Caching ###
+      - name: Cache mac library build
+        id: mac-library-build
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.TKRZW_PREFIX }}
+          key: mac-library-${{ env.TKRZW_VERSION }}
+
+      - name: Cache mac pyenv
+        id: mac-pyenv
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.PYENV_ROOT }}
+          key: mac-pyenv-${{ matrix.version }}
+
+      - name: Cache tkrzw python
+        id: tkrzw-python-tar
+        uses: actions/cache@v3
+        with:
+          path: ${{ github.workspace }}/tkrzw-python-${{ env.TKRZW_PYTHON_VERSION }}.tar.gz
+          key: tkrzw-python-tar-${{ env.TKRZW_PYTHON_VERSION }}
+
+      ### Build ###
+      - name: Setup build as root
+        run: |
+            brew install openssl readline sqlite3 xz zlib tcl-tk
+        shell: bash
+
+      - name: Install python version
+        if: steps.mac-pyenv.outputs.cache-hit != 'true'
         run: |
           ./wheeler pyenv ${{ matrix.version }} 3.10.8
         shell: bash
